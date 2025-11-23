@@ -8,6 +8,7 @@
     "pg-hstore": "^2.3.4",
     "postgres": "^3.4.7",
     "sequelize": "^6.37.7",
-    "sequelize-cli": "^6.6.3"
+    "sequelize-cli": "^6.6.3",
+    "transbank-sdk": "^6.1.0"
   }
 }

@@ -4,6 +4,7 @@ const { Model } = require('sequelize');
 module.exports = (sequelize, DataTypes) => {
   class Product extends Model {
     static associate(models) {
+      Product.hasMany(models.OrderItem, { foreignKey: 'productId', as: 'orderItems' });
     }
   }
   Product.init({
@@ -20,7 +21,9 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false
     },
     category: {
-      type: DataTypes.STRING
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'General'
     }
   }, {
     sequelize,

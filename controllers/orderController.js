@@ -1,87 +1,130 @@
 const db = require('../models');
 const Order = db.Order;
 const OrderItem = db.OrderItem;
-const Product = db.Product; // Necesario para incluir detalles del producto al consultar
+const Product = db.Product;
+const User = db.User;
 
-// 1. Crear una nueva orden (Checkout)
+
 exports.createOrder = async (req, res) => {
-  // Iniciamos una transacción para asegurar integridad de datos
-  const transaction = await db.sequelize.transaction(); 
-  
+  const transaction = await db.sequelize.transaction();
   try {
     const { userId, items, total } = req.body;
 
-    // Validaciones básicas
-    if (!userId) {
-        return res.status(400).json({ message: 'El usuario es obligatorio.' });
-    }
-    if (!items || items.length === 0) {
-        return res.status(400).json({ message: 'El carrito no puede estar vacío.' });
+    if (!userId || !items || items.length === 0) {
+      return res.status(400).json({ message: 'Datos incompletos para la orden' });
     }
 
-    // 1. Crear la Orden Cabecera
     const newOrder = await Order.create({
       userId,
       total,
-      status: 'pagado'
+      status: 'Pagado'
     }, { transaction });
 
-    // 2. Preparar los datos de los items
     const orderItemsData = items.map(item => ({
       orderId: newOrder.id,
-      productId: item.id, // El ID viene del producto en el carrito
+      productId: item.id,
       quantity: item.quantity,
       price: item.price
     }));
 
-    // 3. Guardar todos los items en la tabla OrderItems
     await OrderItem.bulkCreate(orderItemsData, { transaction });
-
-    // 4. Si todo sale bien, confirmamos la transacción en la BD
     await transaction.commit();
 
-    console.log(`Orden #${newOrder.id} creada exitosamente para el usuario ${userId}`);
-    
-    res.status(201).json({ 
-        message: 'Compra realizada con éxito', 
-        orderId: newOrder.id,
-        order: newOrder 
-    });
-
+    res.status(201).json({ message: 'Orden creada con éxito', orderId: newOrder.id });
   } catch (error) {
-    // Si algo falla, deshacemos cualquier cambio en la BD
     await transaction.rollback();
-    console.error('Error al crear la orden:', error);
-    res.status(500).json({ message: 'Error al procesar la compra', error: error.message });
+    res.status(500).json({ message: 'Error al crear la orden', error: error.message });
   }
 };
 
-// 2. Obtener historial de órdenes de un usuario
+
 exports.getUserOrders = async (req, res) => {
   try {
     const { userId } = req.params;
-
     const orders = await Order.findAll({
       where: { userId },
       include: [
         {
           model: OrderItem,
           as: 'items',
-          include: [
-            {
-              model: Product,
-              as: 'product',
-              attributes: ['name', 'image'] // Solo traemos nombre e imagen del producto
-            }
-          ]
+          include: [{ model: Product, as: 'product', attributes: ['name', 'image'] }]
         }
       ],
-      order: [['createdAt', 'DESC']] // Las más recientes primero
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener historial', error: error.message });
+  }
+};
+
+
+
+
+exports.getAllOrders = async (req, res) => {
+  try {
+    const orders = await Order.findAll({
+      include: [
+        { model: User, as: 'user', attributes: ['name', 'email'] }, 
+        { model: OrderItem, as: 'items' }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener todas las órdenes', error: error.message });
+  }
+};
+
+
+exports.getOrderById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findByPk(id, {
+      include: [
+        { model: User, as: 'user', attributes: ['name', 'email'] },
+        { 
+          model: OrderItem, 
+          as: 'items',
+          include: [{ model: Product, as: 'product' }]
+        }
+      ]
     });
 
-    res.status(200).json(orders);
+    if (!order) return res.status(404).json({ message: 'Orden no encontrada' });
+    
+    res.json(order);
   } catch (error) {
-    console.error('Error al obtener historial:', error);
-    res.status(500).json({ message: 'Error al obtener historial de compras', error: error.message });
+    res.status(500).json({ message: 'Error al obtener la orden', error: error.message });
+  }
+};
+
+
+exports.updateOrderStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; 
+
+    const order = await Order.findByPk(id);
+    if (!order) return res.status(404).json({ message: 'Orden no encontrada' });
+
+    await order.update({ status });
+    res.json({ message: 'Estado actualizado', order });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al actualizar estado', error: error.message });
+  }
+};
+
+
+exports.deleteOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Order.destroy({ where: { id } });
+    
+    if (!deleted) return res.status(404).json({ message: 'Orden no encontrada' });
+
+    res.json({ message: 'Orden eliminada correctamente' });
+  } catch (error) {
+    res.status(500).json({ message: 'Error al eliminar orden', error: error.message });
   }
 };
