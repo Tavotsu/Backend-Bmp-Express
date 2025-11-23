@@ -1,4 +1,3 @@
 config/config.json
-config/db.js
 node_modules
 .env
